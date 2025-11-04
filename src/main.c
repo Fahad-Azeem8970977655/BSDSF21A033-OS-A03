@@ -1,5 +1,7 @@
 // Simple shell for Feature 1 (Base shell)
 // Author: BSDSF21A033
+#include <ctype.h>
+#include <ctype.h>
 #include "shell.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,14 +42,37 @@ int main(void) {
         if (len > 0 && line[len-1] == '\n') line[len-1] = '\0';
 
         // skip empty lines
+                // skip empty or comment lines
         char *p = line;
         while (*p == ' ' || *p == '\t') p++;
-        if (*p == '\0') { free(line); continue; }
+        if (*p == '\0' || *p == '#') { free(line); continue; }
 
-        // simple comment support: ignore lines starting with #
-        if (*p == '#') { free(line); continue; }
+        // handle !n command (re-execute history)
+        if (p[0] == '!' && isdigit(p[1])) {
+            int n = atoi(p + 1);
+            char *cmd = get_history_command(n);
+            if (cmd == NULL) {
+                fprintf(stderr, "No such history entry: %d\n", n);
+                free(line);
+                continue;
+            }
+            free(line);
+            line = cmd;
+            p = line;
+            printf("Re-executing: %s\n", line);
+        }
+
+        // add to history
+        add_history_cmd(p);
 
         int argc = parse_line(p, argv);
+
+        
+        
+
+        
+  
+
         if (argc == 0) { free(line); continue; }
 
         // check for builtin "exit"
