@@ -1,5 +1,6 @@
 // Simple shell for Feature 1 (Base shell)
 // Author: BSDSF21A033
+#include "shell.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,12 +51,15 @@ int main(void) {
         if (argc == 0) { free(line); continue; }
 
         // check for builtin "exit"
-        if (strcmp(argv[0], "exit") == 0) {
-            free(line);
-            break;
-        }
+        // check built-ins
 
-        run_command(argv);
+       if (handle_builtin(argv)) {
+       free(line);
+       continue;  // built-in handled
+     }
+
+
+       run_command(argv);
 
         free(line);
     }

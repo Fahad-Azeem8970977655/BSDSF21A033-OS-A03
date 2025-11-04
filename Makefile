@@ -5,7 +5,8 @@ CFLAGS = -Wall -Wextra -g
 SRCDIR = src
 BINDIR = bin
 TARGET = $(BINDIR)/myshell
-SRC = $(SRCDIR)/main.c
+SRC = $(SRCDIR)/main.c $(SRCDIR)/builtins.c
+
 
 .PHONY: all clean
 
