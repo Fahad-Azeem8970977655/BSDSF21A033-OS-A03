@@ -1,4 +1,4 @@
-// builtins.c - BSDSF21A033 Feature 2 & 3
+// builtins.c - BSDSF21A033 Feature 2, 3, and 6
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -9,7 +9,7 @@ void print_help(void) {
     printf("Available built-in commands:\n");
     printf("  cd <dir>   - Change directory\n");
     printf("  help       - Show this help message\n");
-    printf("  jobs       - List background jobs (not yet implemented)\n");
+    printf("  jobs       - List background jobs\n");
     printf("  history    - Show last 20 executed commands\n");
     printf("  exit       - Exit the shell\n");
 }
@@ -33,7 +33,7 @@ int handle_builtin(char **args) {
         print_help();
         return 1;
     } else if (strcmp(args[0], "jobs") == 0) {
-        printf("Job control not implemented yet.\n");
+        jobs_list();          // ✅ now shows real background jobs
         return 1;
     } else if (strcmp(args[0], "history") == 0) {
         show_history();

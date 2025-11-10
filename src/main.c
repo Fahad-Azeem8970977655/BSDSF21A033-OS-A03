@@ -1,149 +1,155 @@
-// main.c - BSDSF21A033 Features 1-5 (Base, Builtins, History, Readline, I/O redirection & single pipe)
-// Author: Fahad Azeem (BSDSF21A033)
+// main.c - BSDSF21A033
+// Features 1–6: Base Shell, Builtins, History, Readline, I/O Redirection, Piping, Background Jobs
 
+#include "shell.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
-#include <ctype.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-#include "shell.h"
 
+#define MAXLINE 1024
 #define MAXARGS 128
 #define PROMPT "BSDSF21A033$ "
 
-// parse a simple command (no pipe). Detects argv tokens and optional infile/outfile.
-// argv[] will be filled (null-terminated). Caller must not free argv elements (they point into cmdline).
-// Returns 0 on success.
+// ---------------------------------------------------------------
+// I/O Redirection and Piping Helpers (Feature 5)
+// ---------------------------------------------------------------
+
 static int parse_simple_command(char *cmdline, char **argv, char **infile, char **outfile) {
+    int argc = 0;
     *infile = NULL;
     *outfile = NULL;
-    int argc = 0;
-    char *tok = strtok(cmdline, " \t\n");
-    while (tok != NULL && argc < MAXARGS - 1) {
-        if (strcmp(tok, "<") == 0) {
-            tok = strtok(NULL, " \t\n");
-            if (!tok) { fprintf(stderr, "syntax error: expected filename after '<'\n"); return -1; }
-            *infile = tok;
-        } else if (strcmp(tok, ">") == 0) {
-            tok = strtok(NULL, " \t\n");
-            if (!tok) { fprintf(stderr, "syntax error: expected filename after '>'\n"); return -1; }
-            *outfile = tok;
+
+    char *token = strtok(cmdline, " \t");
+    while (token != NULL && argc < MAXARGS - 1) {
+        if (strcmp(token, "<") == 0) {
+            token = strtok(NULL, " \t");
+            if (token) *infile = token;
+        } else if (strcmp(token, ">") == 0) {
+            token = strtok(NULL, " \t");
+            if (token) *outfile = token;
         } else {
-            argv[argc++] = tok;
+            argv[argc++] = token;
         }
-        tok = strtok(NULL, " \t\n");
+        token = strtok(NULL, " \t");
     }
     argv[argc] = NULL;
-    return 0;
+    return argc;
 }
 
-// execute a single command with optional infile/outfile redirection
-static void execute_single(char **argv, char *infile, char *outfile) {
+static void execute_single(char **argv, char *infile, char *outfile, int background) {
     pid_t pid = fork();
-    if (pid < 0) {
-        perror("fork");
-        return;
-    }
     if (pid == 0) {
-        // child
+        // Child process
         if (infile) {
             int fd = open(infile, O_RDONLY);
-            if (fd < 0) { perror("open infile"); exit(1); }
-            if (dup2(fd, STDIN_FILENO) < 0) { perror("dup2 infile"); exit(1); }
+            if (fd < 0) { perror("input redirection"); exit(1); }
+            dup2(fd, STDIN_FILENO);
             close(fd);
         }
         if (outfile) {
             int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            if (fd < 0) { perror("open outfile"); exit(1); }
-            if (dup2(fd, STDOUT_FILENO) < 0) { perror("dup2 outfile"); exit(1); }
+            if (fd < 0) { perror("output redirection"); exit(1); }
+            dup2(fd, STDOUT_FILENO);
             close(fd);
         }
         execvp(argv[0], argv);
-        fprintf(stderr, "myshell: %s: %s\n", argv[0], strerror(errno));
-        exit(127);
+        perror("execvp");
+        exit(1);
+    } else if (pid > 0) {
+        if (background) {
+            add_job(pid, argv[0]);   // Feature 6: track background job
+            printf("[%d] %d running in background\n", get_job_count(), pid);
+        } else {
+            int status;
+            waitpid(pid, &status, 0);
+        }
     } else {
-        // parent
-        int status;
-        waitpid(pid, &status, 0);
+        perror("fork");
     }
 }
 
-// execute a two-stage pipeline: left | right
-// left_infile applies to left command (may be NULL), right_outfile applies to right command (may be NULL)
-static void execute_pipe(char **left_argv, char *left_infile, char **right_argv, char *right_outfile) {
-    int pipefd[2];
-    if (pipe(pipefd) < 0) {
+static void execute_pipe(char **left_argv, char *left_infile,
+                         char **right_argv, char *right_outfile, int background) {
+    int fd[2];
+    if (pipe(fd) == -1) {
         perror("pipe");
         return;
     }
 
     pid_t pid1 = fork();
-    if (pid1 < 0) { perror("fork"); return; }
     if (pid1 == 0) {
-        // left child: write end -> stdout
-        close(pipefd[0]); // close read end
-        if (dup2(pipefd[1], STDOUT_FILENO) < 0) { perror("dup2 pipe write"); exit(1); }
-        close(pipefd[1]);
-
         if (left_infile) {
-            int fd = open(left_infile, O_RDONLY);
-            if (fd < 0) { perror("open left infile"); exit(1); }
-            if (dup2(fd, STDIN_FILENO) < 0) { perror("dup2 left infile"); exit(1); }
-            close(fd);
+            int in = open(left_infile, O_RDONLY);
+            if (in < 0) { perror("open infile"); exit(1); }
+            dup2(in, STDIN_FILENO);
+            close(in);
         }
-
+        dup2(fd[1], STDOUT_FILENO);
+        close(fd[0]);
+        close(fd[1]);
         execvp(left_argv[0], left_argv);
-        fprintf(stderr, "myshell: %s: %s\n", left_argv[0], strerror(errno));
-        exit(127);
+        perror("execvp left");
+        exit(1);
     }
 
     pid_t pid2 = fork();
-    if (pid2 < 0) { perror("fork"); return; }
     if (pid2 == 0) {
-        // right child: read end -> stdin
-        close(pipefd[1]); // close write end
-        if (dup2(pipefd[0], STDIN_FILENO) < 0) { perror("dup2 pipe read"); exit(1); }
-        close(pipefd[0]);
-
         if (right_outfile) {
-            int fd = open(right_outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            if (fd < 0) { perror("open right outfile"); exit(1); }
-            if (dup2(fd, STDOUT_FILENO) < 0) { perror("dup2 right outfile"); exit(1); }
-            close(fd);
+            int out = open(right_outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (out < 0) { perror("open outfile"); exit(1); }
+            dup2(out, STDOUT_FILENO);
+            close(out);
         }
-
+        dup2(fd[0], STDIN_FILENO);
+        close(fd[0]);
+        close(fd[1]);
         execvp(right_argv[0], right_argv);
-        fprintf(stderr, "myshell: %s: %s\n", right_argv[0], strerror(errno));
-        exit(127);
+        perror("execvp right");
+        exit(1);
     }
 
-    // parent
-    close(pipefd[0]);
-    close(pipefd[1]);
-    waitpid(pid1, NULL, 0);
-    waitpid(pid2, NULL, 0);
+    close(fd[0]);
+    close(fd[1]);
+
+    if (background) {
+        add_job(pid1, left_argv[0]);
+        add_job(pid2, right_argv[0]);
+    } else {
+        waitpid(pid1, NULL, 0);
+        waitpid(pid2, NULL, 0);
+    }
 }
 
+// ---------------------------------------------------------------
+// Main Loop (Features 1–6)
+// ---------------------------------------------------------------
+
 int main(void) {
-    char *line = NULL;
+    char *line;
     char *argv[MAXARGS];
+    using_history();
 
     while (1) {
         line = readline(PROMPT);
-        if (!line) { printf("\n"); break; }
+        if (!line) {
+            printf("\n");
+            break;
+        }
 
-        // skip leading whitespace
+        // Trim leading spaces
         char *p = line;
         while (*p == ' ' || *p == '\t') p++;
         if (*p == '\0' || *p == '#') { free(line); continue; }
 
-        // handle !n re-exec
-        if (p[0] == '!' && isdigit((unsigned char)p[1])) {
+        // Handle !n history re-execution (Feature 3)
+        if (p[0] == '!' && isdigit(p[1])) {
             int n = atoi(p + 1);
             char *cmd = get_history_command(n);
             if (!cmd) {
@@ -157,64 +163,50 @@ int main(void) {
             printf("Re-executing: %s\n", line);
         }
 
-        // Support single pipe: check for '|' in the line
+        // Add to both readline & custom history
+        add_history(p);
+        add_history_cmd(p);
+
+        // Detect background job
+        int background = 0;
+        char *amp = strchr(p, '&');
+        if (amp) {
+            background = 1;
+            *amp = '\0';
+        }
+
+        // Check for pipe
         char *pipe_pos = strchr(p, '|');
         if (pipe_pos) {
-            // split into left and right (in-place)
             *pipe_pos = '\0';
             char *left = p;
             char *right = pipe_pos + 1;
 
-            // trim leading spaces on right
-            while (*right == ' ' || *right == '\t') right++;
+            char *left_argv[MAXARGS], *right_argv[MAXARGS];
+            char *in1 = NULL, *out1 = NULL;
+            char *in2 = NULL, *out2 = NULL;
 
-            // parse left and right
-            char *left_argv[MAXARGS];
-            char *right_argv[MAXARGS];
-            char *left_in = NULL, *left_out = NULL;
-            char *right_in = NULL, *right_out = NULL;
+            parse_simple_command(left, left_argv, &in1, &out1);
+            parse_simple_command(right, right_argv, &in2, &out2);
 
-            if (parse_simple_command(left, left_argv, &left_in, &left_out) < 0) {
+            execute_pipe(left_argv, in1, right_argv, out2, background);
+        } else {
+            // Single command (with optional redirection)
+            char *infile = NULL, *outfile = NULL;
+            parse_simple_command(p, argv, &infile, &outfile);
+
+            // Builtins first
+            if (handle_builtin(argv)) {
                 free(line);
                 continue;
             }
-            if (parse_simple_command(right, right_argv, &right_in, &right_out) < 0) {
-                free(line);
-                continue;
-            }
 
-            // Note: for a pipe, left_out is ignored (use pipe), right_in is ignored (stdin comes from pipe)
-            // We will allow left_in (reading from file) and right_out (writing to file).
-            execute_pipe(left_argv, left_in, right_argv, right_out);
-
-            add_history_cmd(p);
-            add_history(p);
-            free(line);
-            continue;
+            // Then external commands
+            execute_single(argv, infile, outfile, background);
         }
-
-        // No pipe: parse single command (may have < or >)
-        char *infile = NULL;
-        char *outfile = NULL;
-        if (parse_simple_command(p, argv, &infile, &outfile) < 0) {
-            free(line);
-            continue;
-        }
-
-        // add to histories
-        add_history_cmd(p);
-        add_history(p);
-
-        // handle builtins
-        if (argv[0] == NULL) { free(line); continue; }
-        if (handle_builtin(argv)) { free(line); continue; }
-
-        // execute single command with possible redirection
-        execute_single(argv, infile, outfile);
 
         free(line);
     }
-
     return 0;
 }
 
