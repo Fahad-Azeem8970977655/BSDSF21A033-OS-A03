@@ -53,7 +53,7 @@ The shell includes internal built-in commands without calling external executabl
 - Supports **output redirection**: `command > outfile`  
 - Supports **single pipe**: `command1 | command2`  
 - Allows combinations such as `sort < in.txt | head -n 5 > out.txt`  
-- Validates syntax and reports errors for incorrect usage  
+- Validates syntax and reports errors for incorrect usage
 
 ---
 
