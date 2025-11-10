@@ -58,7 +58,7 @@ The shell includes internal built-in commands without calling external executabl
 ---
 
 ## 🧰 **Project Structure**
-BSDSF21A033-OS-A03/ 
+BSDSF21A033-OS-A03/
 ├── include/  
 │ └── shell.h # Function declarations and constants 
 ├── src/
