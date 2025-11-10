@@ -56,11 +56,8 @@ The shell includes internal built-in commands without calling external executabl
 - Validates syntax and reports errors for incorrect usage
 
 ---
-
 Usage Examples
-BSDSF21A033$ ls -l
-BSDSF21A033$ cd ..
-BSDSF21A033$ help
+BSDSF21A033$ ls -l n BSDSF21A033$ cd ..  BSDSF21A033$ help
 BSDSF21A033$ echo Hello > output.txt
 BSDSF21A033$ cat < output.txt
 Hello
