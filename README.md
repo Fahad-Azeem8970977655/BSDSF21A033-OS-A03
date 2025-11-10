@@ -57,15 +57,25 @@ The shell includes internal built-in commands without calling external executabl
 
 ---
 
-## 🧰 **Project Structure**
-BSDSF21A033-OS-A03/
-├── include/  
-│ └── shell.h # Function declarations and constants 
-├── src/
-│ ├── main.c # Core shell logic (Features 1–5)
-│ ├── builtins.c # Built-in commands implementation
-│ └── history.c # In-memory command history management
-├── Makefile # Build configuration
-└── README.md # Project documentation
+Usage Examples
+BSDSF21A033$ ls -l
+BSDSF21A033$ cd ..
+BSDSF21A033$ help
+BSDSF21A033$ echo Hello > output.txt
+BSDSF21A033$ cat < output.txt
+Hello
+BSDSF21A033$ seq 1 5 | tail -n 2
+4
+5
+BSDSF21A033$ history
+1 ls -l
+2 cd ..
+3 help
+4 echo Hello > output.txt
+5 cat < output.txt
+6 seq 1 5 | tail -n 2
+BSDSF21A033$ !4
+Re-executing: echo Hello > output.txt
+
 
 
