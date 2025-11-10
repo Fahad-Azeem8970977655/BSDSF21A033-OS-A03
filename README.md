@@ -58,10 +58,7 @@ The shell includes internal built-in commands without calling external executabl
 ---
 
 ## 🧰 **Project Structure**
-BSDSF21A033-OS-A03/
-├── include/
-│ └── shell.h # Function declarations and constants
-├── src/
+BSDSF21A033-OS-A03/ ├── include/  │ └── shell.h # Function declarations and constants ├── src/
 │ ├── main.c # Core shell logic (Features 1–5)
 │ ├── builtins.c # Built-in commands implementation
 │ └── history.c # In-memory command history management
